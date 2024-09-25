@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-static float *multiplyBasisFunction(
-	int xComponent, int yComponent, int width, int height, uint8_t *rgb, size_t bytesPerRow,
+static void multiplyBasisFunction(
+	float factors[][3], int factorsCount, int width, int height, uint8_t *rgb, size_t bytesPerRow,
 	float *cosX, float *cosY);
 static char *encode_int(int value, int length, char *destination);
 
@@ -29,41 +29,42 @@ const char *blurHashForPixels(int xComponents, int yComponents, int width, int h
 	if(xComponents < 1 || xComponents > 9) return NULL;
 	if(yComponents < 1 || yComponents > 9) return NULL;
 
-	float factors[yComponents][xComponents][3];
+	float factors[yComponents * xComponents][3];
+	int factorsCount = xComponents * yComponents;
 	memset(factors, 0, sizeof(factors));
 
 	init_sRGBToLinear_cache();
 
-	float *cosX = (float *)malloc(sizeof(float) * width * xComponents);
+	float *cosX = (float *)malloc(sizeof(float) * width * factorsCount);
 	if (! cosX) return NULL;
-	float *cosY = (float *)malloc(sizeof(float) * height);
+	float *cosY = (float *)malloc(sizeof(float) * height * factorsCount);
 	if (! cosY) {
 		free(cosX);
 		return NULL;
 	}
-	for(int x = 0; x < xComponents; x++) {
-		for(int i = 0; i < width; i++) {
-			cosX[x * width + i] = cosf(M_PI * x * i / width);
-		}
-	}
-	for(int y = 0; y < yComponents; y++) {
-		for(int i = 0; i < height; i++) {
-			cosY[i] = cosf(M_PI * y * i / height);
-		}
+	for(int i = 0; i < width; i++) {
 		for(int x = 0; x < xComponents; x++) {
-			float *factor = multiplyBasisFunction(x, y, width, height, rgb, bytesPerRow,
-				cosX + x * width, cosY);
-			factors[y][x][0] = factor[0];
-			factors[y][x][1] = factor[1];
-			factors[y][x][2] = factor[2];
+			float weight = cosf(M_PI * x * i / width);
+			for(int y = 0; y < yComponents; y++) {
+				cosX[i * factorsCount + y * xComponents + x] = weight;
+			}
 		}
 	}
+	for(int i = 0; i < height; i++) {
+		for(int y = 0; y < yComponents; y++) {
+			float weight = cosf(M_PI * y * i / height);
+			for(int x = 0; x < xComponents; x++) {
+				cosY[i * factorsCount + y * xComponents + x] = weight;
+			}
+		}
+	}
+	multiplyBasisFunction(factors, factorsCount, width, height, rgb, bytesPerRow, cosX, cosY);
 	free(cosX);
 	free(cosY);
 
-	float *dc = factors[0][0];
+	float *dc = factors[0];
 	float *ac = dc + 3;
-	int acCount = xComponents * yComponents - 1;
+	int acCount = factorsCount - 1;
 	char *ptr = buffer;
 
 	int sizeFlag = (xComponents - 1) + (yComponents - 1) * 9;
@@ -95,31 +96,35 @@ const char *blurHashForPixels(int xComponents, int yComponents, int width, int h
 	return buffer;
 }
 
-static float *multiplyBasisFunction(
-	int xComponent, int yComponent, int width, int height, uint8_t *rgb, size_t bytesPerRow,
+static void multiplyBasisFunction(
+	float factors[][3], int factorsCount, int width, int height, uint8_t *rgb, size_t bytesPerRow,
 	float *cosX, float *cosY
 ) {
-	float r = 0, g = 0, b = 0;
-	float normalisation = (xComponent == 0 && yComponent == 0) ? 1 : 2;
-
 	for(int y = 0; y < height; y++) {
 		uint8_t *src = rgb + y * bytesPerRow;
+		float *cosYLocal = cosY + y * factorsCount;
 		for(int x = 0; x < width; x++) {
-			float basis = cosY[y] * cosX[x];
-			r += basis * sRGBToLinear_cache[src[3 * x + 0]];
-			g += basis * sRGBToLinear_cache[src[3 * x + 1]];
-			b += basis * sRGBToLinear_cache[src[3 * x + 2]];
+			float pixel[3];
+			float *cosXLocal = cosX + x * factorsCount;
+			pixel[0] = sRGBToLinear_cache[src[3 * x + 0]];
+			pixel[1] = sRGBToLinear_cache[src[3 * x + 1]];
+			pixel[2] = sRGBToLinear_cache[src[3 * x + 2]];
+			for (int i = 0; i < factorsCount; i++) {
+				float basis = cosYLocal[i] * cosXLocal[i];
+				factors[i][0] += basis * pixel[0];
+				factors[i][1] += basis * pixel[1];
+				factors[i][2] += basis * pixel[2];
+			}
 		}
 	}
 
-	float scale = normalisation / (width * height);
-
-	static float result[3];
-	result[0] = r * scale;
-	result[1] = g * scale;
-	result[2] = b * scale;
-
-	return result;
+	for (int i = 0; i < factorsCount; i++) {
+		float normalisation = (i == 0) ? 1 : 2;
+		float scale = normalisation / (width * height);
+		factors[i][0] *= scale;
+		factors[i][1] *= scale;
+		factors[i][2] *= scale;
+	}
 }
 
 
