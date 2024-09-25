@@ -9,6 +9,18 @@ static char *encode_int(int value, int length, char *destination);
 static int encodeDC(float r, float g, float b);
 static int encodeAC(float r, float g, float b, float maximumValue);
 
+float *sRGBToLinear_cache = NULL;
+
+static void init_sRGBToLinear_cache() {
+	if (sRGBToLinear_cache != NULL) {
+		return;
+	}
+	sRGBToLinear_cache = (float *)malloc(sizeof(float) * 256);
+	for (int x = 0; x < 256; x++) {
+		sRGBToLinear_cache[x] = sRGBToLinear(x);
+	}
+}
+
 const char *blurHashForPixels(int xComponents, int yComponents, int width, int height, uint8_t *rgb, size_t bytesPerRow) {
 	static char buffer[2 + 4 + (9 * 9 - 1) * 2 + 1];
 
@@ -17,6 +29,8 @@ const char *blurHashForPixels(int xComponents, int yComponents, int width, int h
 
 	float factors[yComponents][xComponents][3];
 	memset(factors, 0, sizeof(factors));
+
+	init_sRGBToLinear_cache();
 
 	for(int y = 0; y < yComponents; y++) {
 		for(int x = 0; x < xComponents; x++) {
@@ -68,9 +82,9 @@ static float *multiplyBasisFunction(int xComponent, int yComponent, int width, i
 	for(int y = 0; y < height; y++) {
 		for(int x = 0; x < width; x++) {
 			float basis = cosf(M_PI * xComponent * x / width) * cosf(M_PI * yComponent * y / height);
-			r += basis * sRGBToLinear(rgb[3 * x + 0 + y * bytesPerRow]);
-			g += basis * sRGBToLinear(rgb[3 * x + 1 + y * bytesPerRow]);
-			b += basis * sRGBToLinear(rgb[3 * x + 2 + y * bytesPerRow]);
+			r += basis * sRGBToLinear_cache[rgb[3 * x + 0 + y * bytesPerRow]];
+			g += basis * sRGBToLinear_cache[rgb[3 * x + 1 + y * bytesPerRow]];
+			b += basis * sRGBToLinear_cache[rgb[3 * x + 2 + y * bytesPerRow]];
 		}
 	}
 
