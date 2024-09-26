@@ -5,6 +5,8 @@
 
 #ifdef __SSE__
 #include <xmmintrin.h>
+#elif defined(__aarch64__)
+#include <arm_neon.h>
 #endif
 
 #if defined(_MSC_VER)
@@ -134,6 +136,23 @@ static void multiplyBasisFunction(
 				factor = _mm_add_ps(factor, _mm_mul_ps(basis2, pixel2));
 				factor = _mm_add_ps(factor, _mm_mul_ps(basis3, pixel3));
 				_mm_storeu_ps(factors[i], factor);
+			}
+#elif defined(__aarch64__)
+			float32x4_t pixel0 = {sRGBToLinear_cache[src[3 * (x+0) + 0]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 2]], 0};
+			float32x4_t pixel1 = {sRGBToLinear_cache[src[3 * (x+1) + 0]], sRGBToLinear_cache[src[3 * (x+1) + 1]], sRGBToLinear_cache[src[3 * (x+1) + 2]], 0};
+			float32x4_t pixel2 = {sRGBToLinear_cache[src[3 * (x+2) + 0]], sRGBToLinear_cache[src[3 * (x+2) + 1]], sRGBToLinear_cache[src[3 * (x+2) + 2]], 0};
+			float32x4_t pixel3 = {sRGBToLinear_cache[src[3 * (x+3) + 0]], sRGBToLinear_cache[src[3 * (x+3) + 1]], sRGBToLinear_cache[src[3 * (x+3) + 2]], 0};
+			for (int i = 0; i < factorsCount; i++) {
+				float32x4_t basis0 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 0 * factorsCount]);
+				float32x4_t basis1 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 1 * factorsCount]);
+				float32x4_t basis2 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 2 * factorsCount]);
+				float32x4_t basis3 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 3 * factorsCount]);
+				float32x4_t factor = vld1q_f32(factors[i]);
+				factor = vmlaq_f32(factor, basis0, pixel0);
+				factor = vmlaq_f32(factor, basis1, pixel1);
+				factor = vmlaq_f32(factor, basis2, pixel2);
+				factor = vmlaq_f32(factor, basis3, pixel3);
+				vst1q_f32(factors[i], factor);
 			}
 #else
 			float pixel0[4] = {sRGBToLinear_cache[src[3 * (x+0) + 0]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 2]]};
