@@ -4,6 +4,7 @@
 #include "stb_image.h"
 
 #include <stdio.h>
+#include <time.h>
 
 const char *blurHashForFile(int xComponents, int yComponents,const char *filename);
 
@@ -37,6 +38,14 @@ const char *blurHashForFile(int xComponents, int yComponents,const char *filenam
 	if(!data) return NULL;
 
 	const char *hash = blurHashForPixels(xComponents, yComponents, width, height, data, width * 3);
+
+	#define TIMES 3
+	clock_t start = clock();
+    for (int i = 0; i < TIMES; i++) {
+        hash = blurHashForPixels(xComponents, yComponents, width, height, data, width * 3);
+    }
+    double time_ms = (double)(clock() - start) / CLOCKS_PER_SEC / TIMES;
+    printf("Time per %d execution: %.3f ms\n", TIMES, time_ms * 1000);
 
 	stbi_image_free(data);
 
