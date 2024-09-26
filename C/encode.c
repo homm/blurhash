@@ -3,6 +3,14 @@
 
 #include <string.h>
 
+#if defined(_MSC_VER)
+    #define ALIGN(x) __declspec(align(x))
+#elif defined(__GNUC__) || defined(__clang__)
+    #define ALIGN(x) __attribute__((aligned(x)))
+#else
+    #define ALIGN(x)
+#endif
+
 static void multiplyBasisFunction(
 	float factors[][4], int factorsCount, int width, int height, uint8_t *rgb, size_t bytesPerRow,
 	float *cosX, float *cosY);
@@ -29,7 +37,7 @@ const char *blurHashForPixels(int xComponents, int yComponents, int width, int h
 	if(xComponents < 1 || xComponents > 9) return NULL;
 	if(yComponents < 1 || yComponents > 9) return NULL;
 
-	float factors[yComponents * xComponents][4];
+	float ALIGN(16) factors[yComponents * xComponents][4];
 	int factorsCount = xComponents * yComponents;
 	memset(factors, 0, sizeof(factors));
 
