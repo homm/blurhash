@@ -3,6 +3,10 @@
 
 #include <string.h>
 
+#ifdef __SSE__
+#include <xmmintrin.h>
+#endif
+
 #if defined(_MSC_VER)
     #define ALIGN(x) __declspec(align(x))
 #elif defined(__GNUC__) || defined(__clang__)
@@ -114,6 +118,24 @@ static void multiplyBasisFunction(
 		int x = 0;
 		for(; x < width - 3; x += 4) {
 			float *cosXLocal = cosX + x * factorsCount;
+#ifdef __SSE__
+			__m128 pixel0 = _mm_set_ps(0, sRGBToLinear_cache[src[3 * (x+0) + 2]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 0]]);
+			__m128 pixel1 = _mm_set_ps(0, sRGBToLinear_cache[src[3 * (x+1) + 2]], sRGBToLinear_cache[src[3 * (x+1) + 1]], sRGBToLinear_cache[src[3 * (x+1) + 0]]);
+			__m128 pixel2 = _mm_set_ps(0, sRGBToLinear_cache[src[3 * (x+2) + 2]], sRGBToLinear_cache[src[3 * (x+2) + 1]], sRGBToLinear_cache[src[3 * (x+2) + 0]]);
+			__m128 pixel3 = _mm_set_ps(0, sRGBToLinear_cache[src[3 * (x+3) + 2]], sRGBToLinear_cache[src[3 * (x+3) + 1]], sRGBToLinear_cache[src[3 * (x+3) + 0]]);
+			for (int i = 0; i < factorsCount; i++) {
+				__m128 basis0 = _mm_set1_ps(cosYLocal[i] * cosXLocal[i + 0 * factorsCount]);
+				__m128 basis1 = _mm_set1_ps(cosYLocal[i] * cosXLocal[i + 1 * factorsCount]);
+				__m128 basis2 = _mm_set1_ps(cosYLocal[i] * cosXLocal[i + 2 * factorsCount]);
+				__m128 basis3 = _mm_set1_ps(cosYLocal[i] * cosXLocal[i + 3 * factorsCount]);
+				__m128 factor = _mm_loadu_ps(factors[i]);
+				factor = _mm_add_ps(factor, _mm_mul_ps(basis0, pixel0));
+				factor = _mm_add_ps(factor, _mm_mul_ps(basis1, pixel1));
+				factor = _mm_add_ps(factor, _mm_mul_ps(basis2, pixel2));
+				factor = _mm_add_ps(factor, _mm_mul_ps(basis3, pixel3));
+				_mm_storeu_ps(factors[i], factor);
+			}
+#else
 			float pixel0[4] = {sRGBToLinear_cache[src[3 * (x+0) + 0]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 2]]};
 			float pixel1[4] = {sRGBToLinear_cache[src[3 * (x+1) + 0]], sRGBToLinear_cache[src[3 * (x+1) + 1]], sRGBToLinear_cache[src[3 * (x+1) + 2]]};
 			float pixel2[4] = {sRGBToLinear_cache[src[3 * (x+2) + 0]], sRGBToLinear_cache[src[3 * (x+2) + 1]], sRGBToLinear_cache[src[3 * (x+2) + 2]]};
@@ -127,6 +149,7 @@ static void multiplyBasisFunction(
 				factors[i][1] += basis0 * pixel0[1] + basis1 * pixel1[1] + basis2 * pixel2[1] + basis3 * pixel3[1];
 				factors[i][2] += basis0 * pixel0[2] + basis1 * pixel1[2] + basis2 * pixel2[2] + basis3 * pixel3[2];
 			}
+#endif
 		}
 		for(; x < width; x++) {
 			float pixel[4];
