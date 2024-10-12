@@ -114,7 +114,108 @@ static void multiplyBasisFunction(
 	float factors[][4], int factorsCount, int width, int height, uint8_t *rgb, size_t bytesPerRow,
 	float *cosX, float *cosY
 ) {
-	for(int y = 0; y < height; y++) {
+	int fi = 0;
+#if defined(__aarch64__)
+	for (int y = 0; y < height; y++) {
+		fi = 0;
+		for (; fi < factorsCount - 11; fi += 12) {
+			float32x4_t factor0 = vld1q_f32(factors[fi+0]);
+			float32x4_t factor1 = vld1q_f32(factors[fi+1]);
+			float32x4_t factor2 = vld1q_f32(factors[fi+2]);
+			float32x4_t factor3 = vld1q_f32(factors[fi+3]);
+			float32x4_t factor4 = vld1q_f32(factors[fi+4]);
+			float32x4_t factor5 = vld1q_f32(factors[fi+5]);
+			float32x4_t factor6 = vld1q_f32(factors[fi+6]);
+			float32x4_t factor7 = vld1q_f32(factors[fi+7]);
+			float32x4_t factor8 = vld1q_f32(factors[fi+8]);
+			float32x4_t factor9 = vld1q_f32(factors[fi+9]);
+			float32x4_t factor10 = vld1q_f32(factors[fi+10]);
+			float32x4_t factor11 = vld1q_f32(factors[fi+11]);
+			uint8_t *src = rgb + y * bytesPerRow;
+			float *cosYLocal = cosY + y * factorsCount;
+			int x = 0;
+			float32x4_t pixel = vaddq_f32(
+				vaddq_f32(
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+0) + 0]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 2]]},
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+1) + 0]], sRGBToLinear_cache[src[3 * (x+1) + 1]], sRGBToLinear_cache[src[3 * (x+1) + 2]]}),
+				vaddq_f32(
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+2) + 0]], sRGBToLinear_cache[src[3 * (x+2) + 1]], sRGBToLinear_cache[src[3 * (x+2) + 2]]},
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+3) + 0]], sRGBToLinear_cache[src[3 * (x+3) + 1]], sRGBToLinear_cache[src[3 * (x+3) + 2]]})
+			);
+			float32x4_t next_pixel = vaddq_f32(
+				vaddq_f32(
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+4) + 0]], sRGBToLinear_cache[src[3 * (x+4) + 1]], sRGBToLinear_cache[src[3 * (x+4) + 2]]},
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+5) + 0]], sRGBToLinear_cache[src[3 * (x+5) + 1]], sRGBToLinear_cache[src[3 * (x+5) + 2]]}),
+				vaddq_f32(
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+6) + 0]], sRGBToLinear_cache[src[3 * (x+6) + 1]], sRGBToLinear_cache[src[3 * (x+6) + 2]]},
+					(float32x4_t){sRGBToLinear_cache[src[3 * (x+7) + 0]], sRGBToLinear_cache[src[3 * (x+7) + 1]], sRGBToLinear_cache[src[3 * (x+7) + 2]]})
+			);
+			for(; x < width - 11; x += 4) {
+				float *cosXLocal = cosX + x * factorsCount;
+				float32x4_t next_next_pixel = vaddq_f32(
+					vaddq_f32(
+						(float32x4_t){sRGBToLinear_cache[src[3 * (x+8) + 0]], sRGBToLinear_cache[src[3 * (x+8) + 1]], sRGBToLinear_cache[src[3 * (x+8) + 2]]},
+						(float32x4_t){sRGBToLinear_cache[src[3 * (x+9) + 0]], sRGBToLinear_cache[src[3 * (x+9) + 1]], sRGBToLinear_cache[src[3 * (x+9) + 2]]}),
+					vaddq_f32(
+						(float32x4_t){sRGBToLinear_cache[src[3 * (x+10) + 0]], sRGBToLinear_cache[src[3 * (x+10) + 1]], sRGBToLinear_cache[src[3 * (x+10) + 2]]},
+						(float32x4_t){sRGBToLinear_cache[src[3 * (x+11) + 0]], sRGBToLinear_cache[src[3 * (x+11) + 1]], sRGBToLinear_cache[src[3 * (x+11) + 2]]})
+				);
+				
+				float32x4_t basis = vmulq_f32(vld1q_f32(&cosYLocal[fi]), vld1q_f32(&cosXLocal[fi]));
+				factor0 = vmlaq_laneq_f32(factor0, pixel, basis, 0);
+				factor1 = vmlaq_laneq_f32(factor1, pixel, basis, 1);
+				factor2 = vmlaq_laneq_f32(factor2, pixel, basis, 2);
+				factor3 = vmlaq_laneq_f32(factor3, pixel, basis, 3);
+				basis = vmulq_f32(vld1q_f32(&cosYLocal[fi+4]), vld1q_f32(&cosXLocal[fi+4]));
+				factor4 = vmlaq_laneq_f32(factor4, pixel, basis, 0);
+				factor5 = vmlaq_laneq_f32(factor5, pixel, basis, 1);
+				factor6 = vmlaq_laneq_f32(factor6, pixel, basis, 2);
+				factor7 = vmlaq_laneq_f32(factor7, pixel, basis, 3);
+				basis = vmulq_f32(vld1q_f32(&cosYLocal[fi+8]), vld1q_f32(&cosXLocal[fi+8]));
+				factor8 = vmlaq_laneq_f32(factor8, pixel, basis, 0);
+				factor9 = vmlaq_laneq_f32(factor9, pixel, basis, 1);
+				factor10 = vmlaq_laneq_f32(factor10, pixel, basis, 2);
+				factor11 = vmlaq_laneq_f32(factor11, pixel, basis, 3);
+				pixel = next_pixel;
+				next_pixel = next_next_pixel;
+			}
+			for(; x < width; x++) {
+				float *cosXLocal = cosX + x * factorsCount;
+				float32x4_t pixel = {sRGBToLinear_cache[src[3 * x + 0]],
+					sRGBToLinear_cache[src[3 * x + 1]], sRGBToLinear_cache[src[3 * x + 2]]};
+				
+				float32x4_t basis = vmulq_f32(vld1q_f32(&cosYLocal[fi]), vld1q_f32(&cosXLocal[fi]));
+				factor0 = vmlaq_laneq_f32(factor0, pixel, basis, 0);
+				factor1 = vmlaq_laneq_f32(factor1, pixel, basis, 1);
+				factor2 = vmlaq_laneq_f32(factor2, pixel, basis, 2);
+				factor3 = vmlaq_laneq_f32(factor3, pixel, basis, 3);
+				basis = vmulq_f32(vld1q_f32(&cosYLocal[fi+4]), vld1q_f32(&cosXLocal[fi+4]));
+				factor4 = vmlaq_laneq_f32(factor4, pixel, basis, 0);
+				factor5 = vmlaq_laneq_f32(factor5, pixel, basis, 1);
+				factor6 = vmlaq_laneq_f32(factor6, pixel, basis, 2);
+				factor7 = vmlaq_laneq_f32(factor7, pixel, basis, 3);
+				basis = vmulq_f32(vld1q_f32(&cosYLocal[fi+8]), vld1q_f32(&cosXLocal[fi+8]));
+				factor8 = vmlaq_laneq_f32(factor8, pixel, basis, 0);
+				factor9 = vmlaq_laneq_f32(factor9, pixel, basis, 1);
+				factor10 = vmlaq_laneq_f32(factor10, pixel, basis, 2);
+				factor11 = vmlaq_laneq_f32(factor11, pixel, basis, 3);
+			}
+			vst1q_f32(factors[fi+0], factor0);
+			vst1q_f32(factors[fi+1], factor1);
+			vst1q_f32(factors[fi+2], factor2);
+			vst1q_f32(factors[fi+3], factor3);
+			vst1q_f32(factors[fi+4], factor4);
+			vst1q_f32(factors[fi+5], factor5);
+			vst1q_f32(factors[fi+6], factor6);
+			vst1q_f32(factors[fi+7], factor7);
+			vst1q_f32(factors[fi+8], factor8);
+			vst1q_f32(factors[fi+9], factor9);
+			vst1q_f32(factors[fi+10], factor10);
+			vst1q_f32(factors[fi+11], factor11);
+		}
+	}
+#endif
+	for (int y = 0; y < height; y++) {
 		uint8_t *src = rgb + y * bytesPerRow;
 		float *cosYLocal = cosY + y * factorsCount;
 		int x = 0;
@@ -137,29 +238,12 @@ static void multiplyBasisFunction(
 				factor = _mm_add_ps(factor, _mm_mul_ps(basis3, pixel3));
 				_mm_storeu_ps(factors[i], factor);
 			}
-#elif defined(__aarch64__)
-			float32x4_t pixel0 = {sRGBToLinear_cache[src[3 * (x+0) + 0]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 2]], 0};
-			float32x4_t pixel1 = {sRGBToLinear_cache[src[3 * (x+1) + 0]], sRGBToLinear_cache[src[3 * (x+1) + 1]], sRGBToLinear_cache[src[3 * (x+1) + 2]], 0};
-			float32x4_t pixel2 = {sRGBToLinear_cache[src[3 * (x+2) + 0]], sRGBToLinear_cache[src[3 * (x+2) + 1]], sRGBToLinear_cache[src[3 * (x+2) + 2]], 0};
-			float32x4_t pixel3 = {sRGBToLinear_cache[src[3 * (x+3) + 0]], sRGBToLinear_cache[src[3 * (x+3) + 1]], sRGBToLinear_cache[src[3 * (x+3) + 2]], 0};
-			for (int i = 0; i < factorsCount; i++) {
-				float32x4_t basis0 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 0 * factorsCount]);
-				float32x4_t basis1 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 1 * factorsCount]);
-				float32x4_t basis2 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 2 * factorsCount]);
-				float32x4_t basis3 = vdupq_n_f32(cosYLocal[i] * cosXLocal[i + 3 * factorsCount]);
-				float32x4_t factor = vld1q_f32(factors[i]);
-				factor = vmlaq_f32(factor, basis0, pixel0);
-				factor = vmlaq_f32(factor, basis1, pixel1);
-				factor = vmlaq_f32(factor, basis2, pixel2);
-				factor = vmlaq_f32(factor, basis3, pixel3);
-				vst1q_f32(factors[i], factor);
-			}
 #else
 			float pixel0[4] = {sRGBToLinear_cache[src[3 * (x+0) + 0]], sRGBToLinear_cache[src[3 * (x+0) + 1]], sRGBToLinear_cache[src[3 * (x+0) + 2]]};
 			float pixel1[4] = {sRGBToLinear_cache[src[3 * (x+1) + 0]], sRGBToLinear_cache[src[3 * (x+1) + 1]], sRGBToLinear_cache[src[3 * (x+1) + 2]]};
 			float pixel2[4] = {sRGBToLinear_cache[src[3 * (x+2) + 0]], sRGBToLinear_cache[src[3 * (x+2) + 1]], sRGBToLinear_cache[src[3 * (x+2) + 2]]};
 			float pixel3[4] = {sRGBToLinear_cache[src[3 * (x+3) + 0]], sRGBToLinear_cache[src[3 * (x+3) + 1]], sRGBToLinear_cache[src[3 * (x+3) + 2]]};
-			for (int i = 0; i < factorsCount; i++) {
+			for (int i = fi; i < factorsCount; i++) {
 				float basis0 = cosYLocal[i] * cosXLocal[i + 0 * factorsCount];
 				float basis1 = cosYLocal[i] * cosXLocal[i + 1 * factorsCount];
 				float basis2 = cosYLocal[i] * cosXLocal[i + 2 * factorsCount];
@@ -176,7 +260,7 @@ static void multiplyBasisFunction(
 			pixel[0] = sRGBToLinear_cache[src[3 * x + 0]];
 			pixel[1] = sRGBToLinear_cache[src[3 * x + 1]];
 			pixel[2] = sRGBToLinear_cache[src[3 * x + 2]];
-			for (int i = 0; i < factorsCount; i++) {
+			for (int i = fi; i < factorsCount; i++) {
 				float basis = cosYLocal[i] * cosXLocal[i];
 				factors[i][0] += basis * pixel[0];
 				factors[i][1] += basis * pixel[1];
