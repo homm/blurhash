@@ -14,13 +14,16 @@ static int encodeAC(float r, float g, float b, float maximumValue);
 float *sRGBToLinear_cache = NULL;
 
 static void init_sRGBToLinear_cache() {
+	float *cache;
 	if (sRGBToLinear_cache != NULL) {
 		return;
 	}
-	sRGBToLinear_cache = (float *)malloc(sizeof(float) * 256);
+	cache = (float *)malloc(sizeof(float) * 256);
 	for (int x = 0; x < 256; x++) {
-		sRGBToLinear_cache[x] = sRGBToLinear(x);
+		cache[x] = sRGBToLinear(x);
 	}
+	// Assign cache after population to avoid races
+	sRGBToLinear_cache = cache;
 }
 
 const char *blurHashForPixels(int xComponents, int yComponents, int width, int height, uint8_t *rgb, size_t bytesPerRow) {
@@ -32,8 +35,6 @@ const char *blurHashForPixels(int xComponents, int yComponents, int width, int h
 	float factors[yComponents * xComponents][4];
 	int factorsCount = xComponents * yComponents;
 	memset(factors, 0, sizeof(factors));
-
-	init_sRGBToLinear_cache();
 
 	float *cosX = (float *)malloc(sizeof(float) * width * factorsCount);
 	if (! cosX) return NULL;
@@ -100,6 +101,8 @@ static void multiplyBasisFunction(
 	float factors[][4], int factorsCount, int width, int height, uint8_t *rgb, size_t bytesPerRow,
 	float *cosX, float *cosY
 ) {
+	init_sRGBToLinear_cache();
+
 	for(int y = 0; y < height; y++) {
 		uint8_t *src = rgb + y * bytesPerRow;
 		float *cosYLocal = cosY + y * factorsCount;
